@@ -1,0 +1,114 @@
+/* assets/style.css — EduMind AI global styles */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&display=swap');
+
+/* ── Global reset ─────────────────────────────────────────── */
+html, body, [class*="css"] {
+    font-family: 'Sora', sans-serif;
+}
+
+/* ── Main title ───────────────────────────────────────────── */
+.main-title {
+    font-size: 2.4rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #6c63ff 0%, #ff6584 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.2rem;
+}
+
+.subtitle {
+    font-size: 1rem;
+    color: #7c7ca0;
+    margin-bottom: 1.5rem;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: #f3f1ff;
+}
+
+[data-testid="stSidebar"] h2 {
+    color: #1a1a2e;
+    font-weight: 600;
+}
+
+/* ── Chat messages ────────────────────────────────────────── */
+[data-testid="stChatMessage"] {
+    border-radius: 14px;
+    padding: 4px 0;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.stButton > button {
+    border-radius: 20px;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.stButton > button:hover {
+    border-color: #6c63ff;
+    color: #6c63ff;
+}
+
+/* ── Text input ───────────────────────────────────────────── */
+.stTextInput input, .stTextArea textarea {
+    border-radius: 12px;
+    font-family: 'Sora', sans-serif;
+}
+
+/* ── Alerts ───────────────────────────────────────────────── */
+.stAlert {
+    border-radius: 12px;
+}
+
+/* ── File uploader ────────────────────────────────────────── */
+[data-testid="stFileUploader"] {
+    border-radius: 12px;
+}
+
+/* ── Expander ─────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    border-radius: 12px;
+    border: 1px solid #e8e4ff;
+}
+
+/* ── Radio buttons ────────────────────────────────────────── */
+[data-testid="stRadio"] label {
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* ── Select box ───────────────────────────────────────────── */
+.stSelectbox select {
+    border-radius: 10px;
+    font-family: 'Sora', sans-serif;
+}
+
+/* ── Spinner ──────────────────────────────────────────────── */
+.stSpinner {
+    color: #6c63ff;
+}
+
+/* ── Divider ──────────────────────────────────────────────── */
+hr {
+    border-color: #e8e4ff;
+    margin: 1rem 0;
+}
+
+/* ── Info/success/warning boxes ───────────────────────────── */
+.stInfo {
+    background: #f0eeff;
+    border-left-color: #6c63ff;
+    border-radius: 10px;
+}
+
+.stSuccess {
+    border-radius: 10px;
+}
+
+.stWarning {
+    border-radius: 10px;
+}
