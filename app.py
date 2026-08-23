@@ -4,9 +4,12 @@ Powered by Ollama (FREE — no API key required)
 """
 
 import streamlit as st
-from pages import text_chat, image_analysis, voice_tts, multimodal
-from utils.session import init_session
-from utils.claude_client import check_ollama_running, list_models
+import text_chat
+import image_analysis
+import voice_tts
+import multimodal
+from session import init_session
+from claude_client import check_ollama_running, list_models
 
 st.set_page_config(
     page_title="EduMind AI — Ollama",
@@ -15,69 +18,70 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-with open("assets/style.css") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+try:
+    with open("style.css", encoding="utf-8") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+except FileNotFoundError:
+    pass
 
 init_session()
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🎓 EduMind AI")
     st.markdown("*Powered by Ollama — 100% Free*")
     st.divider()
 
-    # ── Ollama status ──────────────────────────────────────────────────────────
     st.markdown("### 🦙 Ollama Connection")
-    ollama_url = st.text_input(
-        "Ollama URL",
-        value=st.session_state.get("ollama_url", "http://localhost:11434"),
-        help="Default: http://localhost:11434",
-    )
-    st.session_state["ollama_url"] = ollama_url
+    try:
+        secret_ollama_url = st.secrets.get("OLLAMA_URL", "")
+    except Exception:
+        secret_ollama_url = ""
 
-    is_running     = check_ollama_running()
+    if secret_ollama_url:
+        ollama_url = secret_ollama_url.rstrip("/")
+        st.session_state["ollama_url"] = ollama_url
+        st.caption("Using Ollama URL from Streamlit Secrets")
+    else:
+        ollama_url = st.text_input(
+            "Ollama URL",
+            value=st.session_state.get("ollama_url", "http://localhost:11434"),
+            help="Local: http://localhost:11434. Streamlit Cloud requires a reachable remote Ollama endpoint.",
+        ).rstrip("/")
+        st.session_state["ollama_url"] = ollama_url
+
+    is_running = check_ollama_running()
     available_models = list_models() if is_running else []
 
     if is_running:
         st.success(f"✅ Ollama running — {len(available_models)} model(s) found")
     else:
-        st.error("❌ Ollama not running")
+        st.warning("⚠️ Ollama not reachable")
 
     st.divider()
 
-    # ── Model selection ────────────────────────────────────────────────────────
     st.markdown("### 🤖 Models")
-
-    # Use real installed models if available, else show sensible defaults
     if available_models:
         text_model_options = available_models
-        # Vision models: prefer llava/moondream; fall back to first available
         vision_options = [m for m in available_models if any(
             v in m.lower() for v in ["llava", "bakllava", "moondream", "minicpm", "vision"]
         )]
         if not vision_options:
-            vision_options = available_models   # allow any model as vision fallback
+            vision_options = available_models
     else:
         text_model_options = ["llama3.2", "llama3.1", "mistral", "gemma2", "phi3", "qwen2.5"]
-        vision_options     = ["llava", "moondream"]
+        vision_options = ["llava", "moondream"]
 
-    # Preserve previous selection if still valid
-    prev_text   = st.session_state.get("model", text_model_options[0])
+    prev_text = st.session_state.get("model", text_model_options[0])
     prev_vision = st.session_state.get("vision_model", vision_options[0])
-
-    text_idx   = text_model_options.index(prev_text)   if prev_text   in text_model_options   else 0
-    vision_idx = vision_options.index(prev_vision)     if prev_vision in vision_options         else 0
+    text_idx = text_model_options.index(prev_text) if prev_text in text_model_options else 0
+    vision_idx = vision_options.index(prev_vision) if prev_vision in vision_options else 0
 
     st.session_state["model"] = st.selectbox(
-        "Text Model",
-        text_model_options,
-        index=text_idx,
+        "Text Model", text_model_options, index=text_idx,
         help="Used for Text Chat and Voice modes",
     )
     st.session_state["vision_model"] = st.selectbox(
-        "Vision Model (images)",
-        vision_options,
-        index=vision_idx,
+        "Vision Model (images)", vision_options, index=vision_idx,
         help="Used in Image Analysis and Multimodal modes",
     )
 
@@ -85,8 +89,6 @@ with st.sidebar:
         st.caption(f"Installed: `{'`, `'.join(available_models)}`")
 
     st.divider()
-
-    # ── Learning mode ──────────────────────────────────────────────────────────
     st.markdown("### 📚 Learning Mode")
     mode = st.radio(
         "Select mode",
@@ -97,8 +99,6 @@ with st.sidebar:
     st.session_state["mode"] = mode
 
     st.divider()
-
-    # ── Topic & settings ───────────────────────────────────────────────────────
     st.markdown("### 🏷 Topic Focus")
     topic = st.selectbox(
         "Topic",
@@ -108,13 +108,15 @@ with st.sidebar:
     st.session_state["topic"] = topic
 
     st.markdown("### ⚙️ Settings")
-    st.session_state["max_tokens"]   = st.slider("Max response tokens", 256, 4096, 1024, 128)
-    st.session_state["temperature"]  = st.slider("Temperature", 0.0, 1.0, 0.7, 0.05)
+    st.session_state["max_tokens"] = st.slider("Max response tokens", 256, 4096, 1024, 128)
+    st.session_state["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.7, 0.05)
 
     st.divider()
     if st.button("🗑 Clear Chat History", use_container_width=True):
-        st.session_state["messages"]    = []
-        st.session_state["image_data"]  = None
+        st.session_state["messages"] = []
+        st.session_state["image_data"] = None
+        st.session_state["image_mime"] = None
+        st.session_state["image_bytes"] = None
         st.rerun()
 
     st.markdown(
@@ -123,48 +125,41 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-# ── Main header ────────────────────────────────────────────────────────────────
 st.markdown("<h1 class='main-title'>🎓 EduMind AI</h1>", unsafe_allow_html=True)
 st.markdown(
     "<p class='subtitle'>Multimodal Educational Assistant — Text · Image · Voice · 100% Free</p>",
     unsafe_allow_html=True,
 )
 
-# ── Ollama not running → show setup guide ──────────────────────────────────────
 if not is_running:
-    st.error("🦙 **Ollama is not running.** Follow the steps below to start it.")
+    st.info(
+        "🦙 **Ollama is not reachable.** The Streamlit interface is deployed correctly, "
+        "but AI responses require a running Ollama server."
+    )
     with st.expander("📖 Quick Setup Guide", expanded=True):
         st.markdown("""
-### Step 1 — Install Ollama
-Download from **[ollama.com/download](https://ollama.com/download)**
+### Local development
+Install Ollama from [ollama.com/download](https://ollama.com/download), then run:
 
-### Step 2 — Start Ollama (keep this terminal open)
-```
+```bash
 ollama serve
-```
-
-### Step 3 — Download a model (new terminal)
-```
 ollama pull llama3.2
 ollama pull llava
 ```
 
-### Step 4 — Refresh this browser page
+### Streamlit Cloud
+Configure an `OLLAMA_URL` secret pointing to a **secure, network-reachable Ollama server**. Do not expose an unauthenticated Ollama server publicly.
 """)
-    st.stop()
-
-# ── No models downloaded yet ───────────────────────────────────────────────────
-if not available_models:
-    st.warning("⚠️ Ollama is running but **no models are downloaded** yet.")
-    st.code("ollama pull llama3.2\nollama pull llava", language="bash")
-    st.stop()
-
-# ── Route to page ──────────────────────────────────────────────────────────────
-if mode == "💬 Text Chat":
-    text_chat.render()
-elif mode == "🖼 Image Analysis":
-    image_analysis.render()
-elif mode == "🎙 Voice + TTS":
-    voice_tts.render()
-elif mode == "✨ Multimodal":
-    multimodal.render()
+else:
+    if not available_models:
+        st.warning("⚠️ Ollama is running but **no models are downloaded** yet.")
+        st.code("ollama pull llama3.2\nollama pull llava", language="bash")
+    else:
+        if mode == "💬 Text Chat":
+            text_chat.render()
+        elif mode == "🖼 Image Analysis":
+            image_analysis.render()
+        elif mode == "🎙 Voice + TTS":
+            voice_tts.render()
+        elif mode == "✨ Multimodal":
+            multimodal.render()
