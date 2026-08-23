@@ -4,12 +4,13 @@ Powered by Ollama (FREE — no API key required)
 """
 
 import streamlit as st
-import text_chat
-import image_analysis
-import voice_tts
-import multimodal
+
 from session import init_session
 from claude_client import check_ollama_running, list_models
+
+# Deployment marker: 2026-08-23-cloud-fix-2
+# Mode modules are imported only after Ollama is available. This prevents an
+# unrelated mode-module import error from stopping the whole Streamlit UI.
 
 st.set_page_config(
     page_title="EduMind AI — Ollama",
@@ -62,9 +63,10 @@ with st.sidebar:
     st.markdown("### 🤖 Models")
     if available_models:
         text_model_options = available_models
-        vision_options = [m for m in available_models if any(
-            v in m.lower() for v in ["llava", "bakllava", "moondream", "minicpm", "vision"]
-        )]
+        vision_options = [
+            m for m in available_models
+            if any(v in m.lower() for v in ["llava", "bakllava", "moondream", "minicpm", "vision"])
+        ]
         if not vision_options:
             vision_options = available_models
     else:
@@ -155,11 +157,16 @@ else:
         st.warning("⚠️ Ollama is running but **no models are downloaded** yet.")
         st.code("ollama pull llama3.2\nollama pull llava", language="bash")
     else:
+        # Lazy imports: only load the selected mode after Ollama is confirmed.
         if mode == "💬 Text Chat":
+            import text_chat
             text_chat.render()
         elif mode == "🖼 Image Analysis":
+            import image_analysis
             image_analysis.render()
         elif mode == "🎙 Voice + TTS":
+            import voice_tts
             voice_tts.render()
         elif mode == "✨ Multimodal":
+            import multimodal
             multimodal.render()
