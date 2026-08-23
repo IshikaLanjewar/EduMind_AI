@@ -1,19 +1,18 @@
-"""pages/multimodal.py — Combines text + image + voice + TTS in one view"""
+"""Multimodal mode: text + image + voice + TTS."""
 
 import io
 import base64
 import streamlit as st
 from PIL import Image
-from utils.claude_client import chat
-from utils.audio import render_tts_player, render_voice_input
-from components.chat_ui import render_chat_history, get_user_input
+from claude_client import chat
+from audio import render_tts_player, render_voice_input
+from chat_ui import render_chat_history, get_user_input
 
 
 def render() -> None:
     st.markdown("## ✨ Multimodal Mode")
     st.caption("Combine text questions, image uploads, and voice — all together.")
 
-    # ── Top controls row ──────────────────────────────────────────────────────
     col_img, col_mic, col_tts = st.columns(3)
 
     with col_img:
@@ -28,15 +27,14 @@ def render() -> None:
             raw_bytes = uploaded.read()
             img = Image.open(io.BytesIO(raw_bytes))
             st.image(img, caption="Ready", use_container_width=True)
-            b64  = base64.b64encode(raw_bytes).decode("utf-8")
+            b64 = base64.b64encode(raw_bytes).decode("utf-8")
             mime = uploaded.type or "image/jpeg"
-            st.session_state["image_data"]  = b64
-            st.session_state["image_mime"]  = mime
+            st.session_state["image_data"] = b64
+            st.session_state["image_mime"] = mime
             st.session_state["image_bytes"] = raw_bytes
             st.success("Image attached ✅")
-        else:
-            if not st.session_state.get("image_data"):
-                st.info("No image attached")
+        elif not st.session_state.get("image_data"):
+            st.info("No image attached")
 
     with col_mic:
         st.markdown("**🎙 Voice Input**")
@@ -60,7 +58,6 @@ def render() -> None:
 
     st.divider()
 
-    # ── Quick prompts ─────────────────────────────────────────────────────────
     with st.expander("💡 Quick prompts"):
         starters = [
             "Explain this image in simple terms",
@@ -76,7 +73,6 @@ def render() -> None:
                 st.session_state["prefill"] = s
                 st.rerun()
 
-    # ── Chat History ──────────────────────────────────────────────────────────
     render_chat_history(tts=True)
 
     user_input = get_user_input(
@@ -86,46 +82,39 @@ def render() -> None:
     if not user_input:
         return
 
-    # Snapshot image state before clearing
     has_image = bool(st.session_state.get("image_data"))
-    img_b64   = st.session_state.get("image_data")
-    img_mime  = st.session_state.get("image_mime")
+    img_b64 = st.session_state.get("image_data")
+    img_mime = st.session_state.get("image_mime")
     img_bytes = st.session_state.get("image_bytes")
 
-    # Show user bubble
     with st.chat_message("user", avatar="👤"):
         st.markdown(user_input)
         if has_image and img_bytes:
             st.image(img_bytes, width=150)
 
-    # Build history before saving
     history = [
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state.get("messages", [])
     ]
 
-    # Save user message (store bytes, not PIL object)
     st.session_state["messages"].append({
-        "role":        "user",
-        "content":     user_input,
+        "role": "user",
+        "content": user_input,
         "image_bytes": img_bytes if has_image else None,
     })
 
-    # Clear image from session
     if has_image:
-        st.session_state["image_data"]  = None
-        st.session_state["image_mime"]  = None
+        st.session_state["image_data"] = None
+        st.session_state["image_mime"] = None
         st.session_state["image_bytes"] = None
 
-    # Call Ollama
     with st.chat_message("assistant", avatar="🤖"):
-        mode_label = "✨ Multimodal"
         spinner_msg = "Processing with vision model…" if has_image else "Processing…"
         with st.spinner(spinner_msg):
             reply = chat(
                 user_text=user_input,
                 history=history,
-                mode=mode_label,
+                mode="✨ Multimodal",
                 topic=st.session_state.get("topic", "General"),
                 image_b64=img_b64 if has_image else None,
                 image_mime=img_mime if has_image else None,
