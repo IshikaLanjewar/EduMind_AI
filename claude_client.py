@@ -1,16 +1,25 @@
-"""utils/claude_client.py — Ollama backend (compatible with all Ollama versions)"""
+"""Ollama HTTP client used by EduMind AI."""
 
 import base64
-import requests
 from typing import Optional
+
+import requests
 import streamlit as st
 
-OLLAMA_BASE_URL   = "http://localhost:11434"
-DEFAULT_TEXT_MODEL   = "llama3.2"
+OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_TEXT_MODEL = "llama3.2"
 DEFAULT_VISION_MODEL = "llava"
 
 
 def _base_url() -> str:
+    """Return Streamlit Cloud secret URL when configured, otherwise local Ollama URL."""
+    try:
+        cloud_url = st.secrets.get("OLLAMA_URL", "")
+        if cloud_url:
+            return cloud_url.rstrip("/")
+    except Exception:
+        pass
+
     return st.session_state.get("ollama_url", OLLAMA_BASE_URL).rstrip("/")
 
 
@@ -64,44 +73,37 @@ def chat(
     image_b64: Optional[str] = None,
     image_mime: Optional[str] = None,
 ) -> str:
-    """Send message to Ollama using /api/generate (most compatible endpoint)."""
-
     if not check_ollama_running():
         return (
-            "❌ **Ollama is not running.**\n\n"
-            "Open a terminal and run:\n```\nollama serve\n```\n"
-            "Then refresh this page."
+            "❌ **Ollama is not reachable.**\n\n"
+            "For local use, start Ollama with:\n```bash\nollama serve\n```\n\n"
+            "For Streamlit Cloud, configure the `OLLAMA_URL` secret to a secure, "
+            "network-reachable Ollama server."
         )
 
-    # Choose model
-    if image_b64:
-        model = st.session_state.get("vision_model", DEFAULT_VISION_MODEL)
-    else:
-        model = st.session_state.get("model", DEFAULT_TEXT_MODEL)
+    model = (
+        st.session_state.get("vision_model", DEFAULT_VISION_MODEL)
+        if image_b64
+        else st.session_state.get("model", DEFAULT_TEXT_MODEL)
+    )
 
-    # Verify the model exists locally
     available = list_models()
     if available and model not in available:
-        # Try to find a close match (e.g. "llama3.2" vs "llama3.2:latest")
         match = next((m for m in available if m.startswith(model.split(":")[0])), None)
         if match:
             model = match
         else:
             return (
                 f"❌ **Model `{model}` is not downloaded.**\n\n"
-                f"Run this in your terminal:\n```\nollama pull {model}\n```\n\n"
+                f"Run:\n```bash\nollama pull {model}\n```\n\n"
                 f"**Available models:** {', '.join(available) if available else 'none found'}"
             )
 
     system_prompt = build_system_prompt(mode, topic)
-
-    # ── Build full prompt string for /api/generate ─────────────────────────
-    # This endpoint is the most stable across all Ollama versions.
     prompt_parts = []
 
-    # Add conversation history as formatted text
     for msg in history[-8:]:
-        role    = msg.get("role", "user")
+        role = msg.get("role", "user")
         content = msg.get("content", "")
         if isinstance(content, list):
             content = " ".join(
@@ -114,12 +116,10 @@ def chat(
 
     prompt_parts.append(f"User: {user_text}")
     prompt_parts.append("Assistant:")
-
     full_prompt = "\n".join(prompt_parts)
 
-    # ── Payload for /api/generate ──────────────────────────────────────────
-    payload: dict = {
-        "model":  model,
+    payload = {
+        "model": model,
         "prompt": full_prompt,
         "system": system_prompt,
         "stream": False,
@@ -129,7 +129,6 @@ def chat(
         },
     }
 
-    # Add image for vision models
     if image_b64:
         payload["images"] = [image_b64]
 
@@ -140,51 +139,30 @@ def chat(
             timeout=180,
         )
 
-        # Show helpful error for bad status codes
         if response.status_code == 404:
-            return (
-                f"❌ **Model `{model}` not found on Ollama.**\n\n"
-                f"Run:\n```\nollama pull {model}\n```"
-            )
+            return f"❌ **Model `{model}` not found on Ollama.** Run `ollama pull {model}`."
+
         if response.status_code == 500:
-            detail = ""
             try:
                 detail = response.json().get("error", response.text[:300])
             except Exception:
                 detail = response.text[:300]
-            return (
-                f"❌ **Ollama server error (500).**\n\n"
-                f"Details: `{detail}`\n\n"
-                f"**Try these fixes:**\n"
-                f"1. Make sure the model is fully downloaded: `ollama pull {model}`\n"
-                f"2. Restart Ollama: close and reopen, or run `ollama serve`\n"
-                f"3. Try a different model in the sidebar"
-            )
+            return f"❌ **Ollama server error (500).**\n\nDetails: `{detail}`"
 
         response.raise_for_status()
         data = response.json()
         return data.get("response", "⚠️ Empty response from Ollama.")
 
     except requests.exceptions.ConnectionError:
-        return (
-            "❌ **Cannot connect to Ollama.**\n\n"
-            "Run `ollama serve` in a terminal and keep it open."
-        )
+        return "❌ **Cannot connect to Ollama.** Check the configured Ollama URL."
     except requests.exceptions.Timeout:
-        return (
-            "⏳ **Ollama timed out.**\n\n"
-            "The model is taking too long. Try:\n"
-            "- A smaller model (e.g. `phi3` or `llama3.2`)\n"
-            "- Reducing Max Tokens in sidebar\n"
-            "- Closing other heavy apps to free RAM"
-        )
+        return "⏳ **Ollama timed out.** Try a smaller model or reduce Max Tokens."
     except Exception as exc:
         return f"⚠️ Unexpected error: {exc}"
 
 
 def encode_image(uploaded_file) -> tuple:
-    """Encode UploadedFile → (base64_string, mime_type)."""
-    raw  = uploaded_file.read()
-    b64  = base64.b64encode(raw).decode("utf-8")
+    raw = uploaded_file.read()
+    b64 = base64.b64encode(raw).decode("utf-8")
     mime = uploaded_file.type or "image/jpeg"
     return b64, mime
