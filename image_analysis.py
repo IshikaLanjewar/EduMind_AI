@@ -1,23 +1,23 @@
-"""pages/image_analysis.py — Upload an image and ask Ollama (llava) to explain it"""
+"""Image analysis mode using an Ollama vision model."""
 
 import io
+import base64
 import streamlit as st
 from PIL import Image
-from utils.claude_client import chat, encode_image
-from utils.audio import render_tts_player
-from components.chat_ui import render_chat_history, get_user_input
+from claude_client import chat
+from audio import render_tts_player
+from chat_ui import render_chat_history, get_user_input
 
 
 def render() -> None:
     st.markdown("## 🖼 Image Analysis")
     st.caption(
-        "Upload any educational image — diagrams, textbook pages, charts, photos — "
-        "and ask questions. Requires the **llava** model (`ollama pull llava`)."
+        "Upload an educational image — diagrams, textbook pages, charts, or photos — "
+        "and ask questions. Requires a vision model such as **llava**."
     )
 
     col1, col2 = st.columns([1, 2])
 
-    # ── Left column: upload + prompt suggestions ───────────────────────────────
     with col1:
         uploaded = st.file_uploader(
             "Upload Image",
@@ -27,21 +27,16 @@ def render() -> None:
         )
 
         if uploaded is not None:
-            # Read bytes once and keep them in session (JSON-serialisable)
             raw_bytes = uploaded.read()
             img = Image.open(io.BytesIO(raw_bytes))
             st.image(img, caption="Uploaded image", use_container_width=True)
-
-            # Store base64 + raw bytes (for display) in session state
-            import base64
-            b64   = base64.b64encode(raw_bytes).decode("utf-8")
-            mime  = uploaded.type or "image/jpeg"
-            st.session_state["image_data"]   = b64
-            st.session_state["image_mime"]   = mime
-            st.session_state["image_bytes"]  = raw_bytes  # for thumbnail display
+            b64 = base64.b64encode(raw_bytes).decode("utf-8")
+            mime = uploaded.type or "image/jpeg"
+            st.session_state["image_data"] = b64
+            st.session_state["image_mime"] = mime
+            st.session_state["image_bytes"] = raw_bytes
             st.success("✅ Image ready — type a question →")
 
-        # Prompt suggestions
         st.markdown("**Suggested questions:**")
         suggestions = [
             "Explain everything in this image",
@@ -56,7 +51,6 @@ def render() -> None:
                 st.session_state["prefill"] = s
                 st.rerun()
 
-    # ── Right column: chat ─────────────────────────────────────────────────────
     with col2:
         render_chat_history(tts=True)
 
@@ -71,38 +65,32 @@ def render() -> None:
         if not user_input:
             return
 
-        # Snapshot image data before clearing
-        img_b64   = st.session_state["image_data"]
-        img_mime  = st.session_state["image_mime"]
+        img_b64 = st.session_state["image_data"]
+        img_mime = st.session_state["image_mime"]
         img_bytes = st.session_state.get("image_bytes")
 
-        # Show user bubble
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_input)
             if img_bytes:
                 st.image(img_bytes, width=120)
 
-        # Build history
         history = [
             {"role": m["role"], "content": m["content"]}
             for m in st.session_state.get("messages", [])
         ]
 
-        # Save user message (store raw bytes for history display, not PIL Image)
         st.session_state["messages"].append({
-            "role":        "user",
-            "content":     user_input,
+            "role": "user",
+            "content": user_input,
             "image_bytes": img_bytes,
         })
 
-        # Clear image from session so next upload is fresh
-        st.session_state["image_data"]  = None
-        st.session_state["image_mime"]  = None
+        st.session_state["image_data"] = None
+        st.session_state["image_mime"] = None
         st.session_state["image_bytes"] = None
 
-        # Call Ollama vision model
         with st.chat_message("assistant", avatar="🤖"):
-            with st.spinner("Analysing image with llava…"):
+            with st.spinner("Analysing image with vision model…"):
                 reply = chat(
                     user_text=user_input,
                     history=history,
