@@ -11,32 +11,52 @@ DEFAULT_TEXT_MODEL = "llama3.2"
 DEFAULT_VISION_MODEL = "llava"
 
 
-def _base_url() -> str:
-    """Return Streamlit Cloud secret URL when configured, otherwise local Ollama URL."""
+def _secret(name: str, default: str = "") -> str:
+    """Read a Streamlit secret safely; local development does not require secrets.toml."""
     try:
-        cloud_url = st.secrets.get("OLLAMA_URL", "")
-        if cloud_url:
-            return cloud_url.rstrip("/")
+        value = st.secrets.get(name, default)
+        return str(value) if value is not None else default
     except Exception:
-        pass
+        return default
+
+
+def _base_url() -> str:
+    """Use a Streamlit Cloud Ollama URL when configured, otherwise local Ollama."""
+    cloud_url = _secret("OLLAMA_URL")
+    if cloud_url:
+        return cloud_url.rstrip("/")
 
     return st.session_state.get("ollama_url", OLLAMA_BASE_URL).rstrip("/")
 
 
+def _headers() -> dict:
+    """Optional bearer token for a secured remote Ollama gateway."""
+    token = _secret("OLLAMA_API_KEY")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 def check_ollama_running() -> bool:
     try:
-        requests.get(f"{_base_url()}/api/tags", timeout=4)
-        return True
-    except Exception:
+        response = requests.get(
+            f"{_base_url()}/api/tags",
+            headers=_headers(),
+            timeout=5,
+        )
+        return response.ok
+    except requests.RequestException:
         return False
 
 
 def list_models() -> list:
     try:
-        r = requests.get(f"{_base_url()}/api/tags", timeout=5)
-        r.raise_for_status()
-        return [m["name"] for m in r.json().get("models", [])]
-    except Exception:
+        response = requests.get(
+            f"{_base_url()}/api/tags",
+            headers=_headers(),
+            timeout=8,
+        )
+        response.raise_for_status()
+        return [m["name"] for m in response.json().get("models", [])]
+    except (requests.RequestException, ValueError, KeyError, TypeError):
         return []
 
 
@@ -77,8 +97,8 @@ def chat(
         return (
             "❌ **Ollama is not reachable.**\n\n"
             "For local use, start Ollama with:\n```bash\nollama serve\n```\n\n"
-            "For Streamlit Cloud, configure the `OLLAMA_URL` secret to a secure, "
-            "network-reachable Ollama server."
+            "For Streamlit Cloud, set the `OLLAMA_URL` secret to a secure, "
+            "network-reachable Ollama endpoint."
         )
 
     model = (
@@ -136,8 +156,12 @@ def chat(
         response = requests.post(
             f"{_base_url()}/api/generate",
             json=payload,
+            headers=_headers(),
             timeout=180,
         )
+
+        if response.status_code == 401:
+            return "🔐 **Ollama authentication failed.** Check the `OLLAMA_API_KEY` Streamlit secret."
 
         if response.status_code == 404:
             return f"❌ **Model `{model}` not found on Ollama.** Run `ollama pull {model}`."
@@ -157,6 +181,8 @@ def chat(
         return "❌ **Cannot connect to Ollama.** Check the configured Ollama URL."
     except requests.exceptions.Timeout:
         return "⏳ **Ollama timed out.** Try a smaller model or reduce Max Tokens."
+    except requests.exceptions.RequestException as exc:
+        return f"⚠️ **Ollama request failed:** {exc}"
     except Exception as exc:
         return f"⚠️ Unexpected error: {exc}"
 
