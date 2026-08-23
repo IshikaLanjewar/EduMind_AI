@@ -1,4 +1,4 @@
-"""utils/audio.py — Browser-side Text-to-Speech and Voice Input via Streamlit HTML"""
+"""Browser-side Text-to-Speech and Voice Input via Streamlit HTML."""
 
 import re
 import streamlit as st
@@ -6,21 +6,17 @@ import streamlit.components.v1 as components
 
 
 def _sanitise(text: str) -> str:
-    """Strip markdown and escape for safe embedding inside a JS string."""
-    text = re.sub(r"[#*_`>~\[\]]+", "", text)   # remove markdown symbols
-    text = text.replace("\\", "")                 # remove backslashes
-    text = text.replace("'", " ")                 # replace quotes with space
+    text = re.sub(r"[#*_`>~\[\]]+", "", text)
+    text = text.replace("\\", "")
+    text = text.replace("'", " ")
     text = text.replace('"', " ")
     text = text.replace("\n", " ")
     text = re.sub(r"\s+", " ", text).strip()
-    return text[:2000]                            # cap at 2000 chars
+    return text[:2000]
 
 
 def render_tts_player(text: str) -> None:
-    """Render a Text-to-Speech player widget. Click ▶ to hear the text."""
     rate = st.session_state.get("voice_rate", 150)
-    # Web Speech API rate: 1.0 = normal speed. Our slider is 80-250 (wpm-like).
-    # Map: 80→0.6, 150→1.0, 250→1.6
     api_rate = round(rate / 150, 2)
     safe = _sanitise(text)
 
@@ -58,7 +54,6 @@ def render_tts_player(text: str) -> None:
     utt.onerror = function(){{ btn.textContent = '▶ Listen'; }};
     window.speechSynthesis.speak(utt);
   }}
-  // Auto-play once voices are loaded
   function tryAuto(){{
     if(spoken) return;
     var voices = window.speechSynthesis.getVoices();
@@ -75,9 +70,6 @@ def render_tts_player(text: str) -> None:
 
 
 def render_voice_input() -> None:
-    """Render a browser-based voice input widget.
-    The transcript is shown inside the widget — user copies it to the chat box.
-    """
     components.html(
         """
 <div style="font-family:sans-serif;padding:6px 0">
@@ -86,28 +78,22 @@ def render_voice_input() -> None:
            padding:9px 18px;font-size:13px;cursor:pointer;margin-bottom:6px">
     🎙 Click to Speak
   </button>
-  <div id="status"
-    style="font-size:11px;color:#7c7ca0;margin-bottom:4px;min-height:16px"></div>
-  <div id="transcript"
-    style="font-size:13px;font-weight:500;color:#1a1a2e;
-           background:#f3f1ff;border-radius:8px;padding:6px 10px;
-           min-height:32px;word-break:break-word;white-space:pre-wrap">
-    (transcript appears here)
-  </div>
-  <div style="font-size:11px;color:#aaa;margin-top:4px">
-    Copy the transcript above → paste into the chat box below
-  </div>
+  <div id="status" style="font-size:11px;color:#7c7ca0;margin-bottom:4px;min-height:16px"></div>
+  <div id="transcript" style="font-size:13px;font-weight:500;color:#1a1a2e;
+       background:#f3f1ff;border-radius:8px;padding:6px 10px;min-height:32px;
+       word-break:break-word;white-space:pre-wrap">(transcript appears here)</div>
+  <div style="font-size:11px;color:#aaa;margin-top:4px">Copy the transcript above → paste into the chat box below</div>
 </div>
 <script>
 (function(){{
   var recognition = null;
-  var recording   = false;
+  var recording = false;
 
   function getSR(){{
     return window.SpeechRecognition || window.webkitSpeechRecognition || null;
   }}
 
-  function toggleRec(){{
+  window.toggleRec = function(){{
     var SR = getSR();
     if(!SR){{
       document.getElementById('status').textContent =
@@ -119,43 +105,40 @@ def render_voice_input() -> None:
       return;
     }}
     recognition = new SR();
-    recognition.lang          = 'en-US';
+    recognition.lang = 'en-US';
     recognition.interimResults = true;
-    recognition.continuous    = false;
+    recognition.continuous = false;
 
     recognition.onstart = function(){{
       recording = true;
-      document.getElementById('micBtn').textContent   = '🔴 Stop Recording';
+      document.getElementById('micBtn').textContent = '🔴 Stop Recording';
       document.getElementById('micBtn').style.background = '#ff6584';
-      document.getElementById('status').textContent   = 'Listening… speak now';
+      document.getElementById('status').textContent = 'Listening… speak now';
       document.getElementById('transcript').textContent = '';
     }};
 
     recognition.onresult = function(e){{
       var t = '';
-      for(var i = 0; i < e.results.length; i++)
-        t += e.results[i][0].transcript;
+      for(var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
       document.getElementById('transcript').textContent = t;
     }};
 
     recognition.onend = function(){{
       recording = false;
-      document.getElementById('micBtn').textContent   = '🎙 Click to Speak';
+      document.getElementById('micBtn').textContent = '🎙 Click to Speak';
       document.getElementById('micBtn').style.background = '#6c63ff';
-      document.getElementById('status').textContent   =
-        '✅ Done — copy the transcript above into the chat box';
+      document.getElementById('status').textContent = '✅ Done — copy the transcript above into the chat box';
     }};
 
     recognition.onerror = function(e){{
       recording = false;
       document.getElementById('micBtn').textContent = '🎙 Click to Speak';
       document.getElementById('micBtn').style.background = '#6c63ff';
-      document.getElementById('status').textContent = '⚠ Error: ' + e.error +
-        '. Make sure microphone is allowed.';
+      document.getElementById('status').textContent = '⚠ Error: ' + e.error + '. Make sure microphone is allowed.';
     }};
 
     recognition.start();
-  }}
+  }};
 }})();
 </script>
 """,
